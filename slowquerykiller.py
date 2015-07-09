@@ -4,7 +4,6 @@
 import sys
 import os
 import re
-import time
 import datetime
 import ConfigParser
 
@@ -45,7 +44,7 @@ else:
 
 if not KILLER_PATTERN:
     print 'killer pattern not defined. exit'
-    sys.exit(1)
+    sys.exit(501)
 
 print "[mysql config] MySQLdb://%s:%s@%s:%s\n[%s] %ss\nlog_path: %s"%(USER,PASSWORD,HOST,PORT,KILLER_PATTERN,MAX_TIME,LOG_PATH)
 
@@ -63,7 +62,7 @@ try:
     db=MySQLdb.connect(HOST,USER,PASSWORD)
 except:
     print 'ERROR: db connect failed.\n  Check you configure in config.ini'
-    sys.exit(1) 
+    sys.exit(502)
 
 cursor=db.cursor(cursorclass = MySQLdb.cursors.DictCursor)
 sql="show full processlist"
