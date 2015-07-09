@@ -68,9 +68,7 @@ cursor=db.cursor(cursorclass = MySQLdb.cursors.DictCursor)
 sql="show full processlist"
 cursor.execute(sql)
 
-print "Rows selected:", cursor.rowcount
 
-print 'Id','User','Host','db','Command','Time','State','Info'
 for row in cursor.fetchall():
     #print '[process]',row['Id'], row['User'], row['Host'], row['db'], row['Command'], row['Time'], row['State'], row['Info']
     #print '[process]',row['Id'], row['User'], row['Host'], row['db'], row['Command'], row['Time'], row['State']
@@ -85,7 +83,6 @@ for row in cursor.fetchall():
                 if LOG_PATH:
                     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     line='#kill log [%s]  %ss ID:%s (%s@%s/%s) %s %s\n%s\n\n'%(now,row['Time'],row['Id'],row['User'],row['Host'],row['db'],row['Command'],row['State'],row['Info'] )
-                    #print line
                     try:
                         fp=open(LOG_PATH,'a')
                         fp.write(line)
