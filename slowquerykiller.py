@@ -3,6 +3,7 @@
 
 import sys
 import os
+import time
 import re
 import datetime
 import ConfigParser
@@ -12,43 +13,62 @@ script_path=os.path.split(os.path.realpath(__file__))[0]+'/config.ini'
 cp=ConfigParser.ConfigParser()
 cp.read(script_path)
 
-if cp.has_option('server','host'):
-    HOST=cp.get('server','host')
-else:
-    HOST='127.0.0.1'
-if cp.has_option('server','port'):
-    PORT=int(cp.get('server','port'))
-else:
-    PORT=3306
-if cp.has_option('server','user'):
-    USER=cp.get('server','user')
-else:
-    USER='root'
-if cp.has_option('server','password'):
-    PASSWORD=cp.get('server','password')
-else:
-    PASSWORD=''
-if cp.has_option('killer','pattern'):
-    KILLER_PATTERN=cp.get('killer','pattern')
-else:
-    KILLER_PATTERN=''
-if cp.has_option('server','max_time'):
-    MAX_TIME=int(cp.get('server','max_time'))
-else:
-    MAX_TIME=10
-if cp.has_option('server','log_path'):
-    LOG_PATH=cp.get('server','log_path')
-else:
-    LOG_PATH=''
+
+server={}
+try:
+    server['host']=cp.get('server','host')
+    server['port']=cp.get('server','port')
+    server['user']=cp.get('server','user')
+    server['password']=cp.get('server','password')
+    server['log_path']=cp.get('server','log_path')
+except :
+    #raise ConfigParser.NoOptionError(e)
+    print "config.ini ERROR: section [server] "
+    exit()
+
+moniter=[]
+execute_time=999999
+for it in cp.sections():
+    name=it[:7]
+    joiner=it[7:8]
+    if name=="moniter" and ( joiner=="-" or joiner=="_"):
+        print it
+        try:
+            pattern_text=cp.get(it,'pattern')
+            timeout=int(cp.get(it,'timeout'))
+            moniter.append({
+                    'db':cp.get(it,'db'),
+                    'pattern':re.compile(pattern_text,re.I),
+                    'pattern_text':pattern_text,
+                    'timeout':timeout,
+                    'operate':cp.get(it,'operate'),
+                })
+            if timeout<execute_time:
+                execute_time=timeout
+        except:
+            print "config.ini ERROR: section [moniter] "
+            sys.exit(501)
+
+print '.............'
+
+print server
+print moniter
 
 
-if not KILLER_PATTERN:
-    print 'killer pattern not defined. exit'
-    sys.exit(501)
 
-print "[mysql config] MySQLdb://%s:%s@%s:%s\n[%s] %ss\nlog_path: %s"%(USER,PASSWORD,HOST,PORT,KILLER_PATTERN,MAX_TIME,LOG_PATH)
+sandbox=1   #调试沙盒
 
-pattern=re.compile(KILLER_PATTERN,re.I)
+
+
+
+
+
+log_fp=open(server['log_path'],'a')
+
+
+
+print "[mysql config] MySQLdb://%s:%s@%s %ss\nlog_path: %s"%(server['user'],server['password'],server['host'],server['port'],server['log_path'])
+
 
 
 try:
@@ -59,47 +79,67 @@ except ImportError,mesg:
 print "running..."
 
 try:
-    db=MySQLdb.connect(HOST,USER,PASSWORD)
+    db=MySQLdb.connect(server['host'],server['user'],server['password'])
 except:
     print 'ERROR: db connect failed.\n  Check you configure in config.ini'
     sys.exit(502)
 
+# TODO 这里计算一个执行时长的值，用于筛选超过该值的sql语句
+#   设想：定义多个 moniter，对匹配的进程，执行日志记录或杀死等操作
+#         这里的execute_time按其中time最小的一个moniter为准，用于筛选
 cursor=db.cursor(cursorclass = MySQLdb.cursors.DictCursor)
-sql="show full processlist"
-cursor.execute(sql)
+if sandbox==1:
+    information_dbname="test"
+else:
+    information_dbname="information_schema"
+
+count=0
+while True:
+    count+=1
+    print "\n\n\n-----------------------------------\n## loop:%s"%(count)
+    # The PROCESSLIST table is a nonstandard table. It was added in MySQL 5.1.7   
+    #  - from https://dev.mysql.com/doc/refman/5.1/en/processlist-table.html
+    sql="SELECT `ID`, `USER`, `HOST`, `DB`, `COMMAND`, `TIME`, `STATE`, `INFO` \
+        FROM `%s`.`PROCESSLIST` \
+        WHERE (`DB`!='information_schema' and `USER`!='root' \
+          and `STATE`!='' and `STATE`!='Waiting for INSERT' and `STATE`!='Locked') \
+          and  `TIME` > %s"%(information_dbname,execute_time)
+    cursor.execute(sql)
 
 
-for row in cursor.fetchall():
-    #print '[process]',row['Id'], row['User'], row['Host'], row['db'], row['Command'], row['Time'], row['State'], row['Info']
-    #print '[process]',row['Id'], row['User'], row['Host'], row['db'], row['Command'], row['Time'], row['State']
-    if row['Time'] > MAX_TIME and row['Info']:
-        try:
-            q=row['Info'].replace('\n','').replace('\r','')
-            match=pattern.match(q)
-            if match:
-                sql="kill %s"%(row['Id'])
-                cursor.execute(sql)
+    for row in cursor.fetchall():
+        print '[process]',row['ID'], row['USER'], row['HOST'], row['DB'], row['COMMAND'], row['TIME'], row['STATE']#, row['INFO']
+        #try:
+        if True:
+            q=row['INFO'].replace('\n','').replace('\r','')
 
-                if LOG_PATH:
+            for it in moniter:
+                print ' - testing:',it['db'],it['timeout'],it['pattern']
+                if it['db']==row['DB'] and row['TIME']>=it['timeout'] and it['pattern'].match(q):
+                    print "     match, to kill an log, id: %s  %s"%(row['ID'],sandbox)
+                    sql="kill %s"%(row['ID'])
+                    if sandbox==1:
+                        print "     sandbox kill, just a message: %s"%(sql)
+                    else:
+                        try:
+                            cursor.execute(sql)
+                        except:
+                            pass
                     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    line='#kill log [%s]  %ss ID:%s (%s@%s/%s) %s %s\n%s\n\n'%(now,row['Time'],row['Id'],row['User'],row['Host'],row['db'],row['Command'],row['State'],row['Info'] )
-                    try:
-                        fp=open(LOG_PATH,'a')
-                        fp.write(line)
-                        fp.close()
-                    except:
-                        pass
+                    line='#kill log [%s]  %ss ID:%s (%s@%s/%s) %s %s\n%s\n\n'%(now,row['TIME'],row['ID'],row['USER'],row['HOST'],row['DB'],row['COMMAND'],row['STATE'],row['INFO'] )
+                    log_fp.write(line)
                 else:
-                    print "LOG_PATH false"
-            else:
-                pass
-        except:
-            pass
+                    print "     skip"
+
+        #except:
+        #    print "ERROR in rows loop ....."
+    time.sleep(5)
 
 cursor.close()
 
 
 
 db.close()
+log_fp.close()
 
 
