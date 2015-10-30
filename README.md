@@ -6,3 +6,16 @@ kill slow mysql query,filter by:
 -  query match defined pattern
 
 run it as a python process, like a daemon
+
+## configure
+### server
+declare the server to monitor
+
+
+### moniters
+slow querys filters, and what to do (kill, log) with them
+
+in section [moniter_n]
+use * for wield match all these fields: user, host, db, command, state
+
+moniters used order by the order defined in config.ini, the "n" in [moniter_n] will be ignored

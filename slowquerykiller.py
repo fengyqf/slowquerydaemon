@@ -37,7 +37,11 @@ for it in cp.sections():
             pattern_text=cp.get(it,'pattern')
             timeout=int(cp.get(it,'timeout'))
             moniter.append({
+                    'user':cp.get(it,'user'),
+                    'host':cp.get(it,'host'),
                     'db':cp.get(it,'db'),
+                    'command':cp.get(it,'command'),
+                    'state':cp.get(it,'state'),
                     'pattern':re.compile(pattern_text,re.I),
                     'pattern_text':pattern_text,
                     'timeout':timeout,
@@ -113,7 +117,13 @@ while True:
             q=row['INFO'].replace('\n','').replace('\r','')
             for it in moniter:
                 print ' - testing:%s %ss, %s'%(it['db'],it['timeout'],it['pattern_text'])
-                if it['db']==row['DB'] and row['TIME']>=it['timeout'] and it['pattern'].match(q):
+                if (it['user']=='*' or it['user']==row['USER']) \
+                    and ( it['db']=='*' or it['db']==row['DB']) \
+                    and ( it['db']=='*' or it['db']==row['DB']) \
+                    and ( it['host']=='*' or it['host']==row['HOST']) \
+                    and ( it['command']=='*' or it['command']==row['COMMAND']) \
+                    and ( it['state']=='*' or it['state']==row['STATE']) \
+                    and row['TIME']>=it['timeout'] and it['pattern'].match(q):
                     #print "     match, to kill an log, id: %s  %s"%(row['ID'],sandbox)
                     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     if it['operate']=='kill':
@@ -132,6 +142,7 @@ while True:
                         pass
                     line='#%s [%s] ID:%s %ss (%s@%s/%s) %s, %s\n%s\n\n'%(it['operate'],now,row['ID'],row['TIME'],row['USER'],row['HOST'],row['DB'],row['COMMAND'],row['STATE'],row['INFO'] )
                     log_fp.write(line)
+                    break
                 else:
                     print "     skip"
 
