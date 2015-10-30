@@ -108,25 +108,29 @@ while True:
 
 
     for row in cursor.fetchall():
-        print '[process]',row['ID'], row['USER'], row['HOST'], row['DB'], row['COMMAND'], row['TIME'], row['STATE']#, row['INFO']
-        #try:
-        if True:
+        print '[process]',row['ID'], row['USER'], row['HOST'], row['DB'], row['COMMAND'], row['TIME'], row['STATE'],# row['INFO']
+        if row['INFO']:
             q=row['INFO'].replace('\n','').replace('\r','')
-
             for it in moniter:
-                print ' - testing:',it['db'],it['timeout'],it['pattern']
+                print ' - testing:%s %ss, %s'%(it['db'],it['timeout'],it['pattern_text'])
                 if it['db']==row['DB'] and row['TIME']>=it['timeout'] and it['pattern'].match(q):
-                    print "     match, to kill an log, id: %s  %s"%(row['ID'],sandbox)
-                    sql="kill %s"%(row['ID'])
-                    if sandbox==1:
-                        print "     sandbox kill, just a message: %s"%(sql)
-                    else:
-                        try:
-                            cursor.execute(sql)
-                        except:
-                            pass
+                    #print "     match, to kill an log, id: %s  %s"%(row['ID'],sandbox)
                     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    line='#kill log [%s]  %ss ID:%s (%s@%s/%s) %s %s\n%s\n\n'%(now,row['TIME'],row['ID'],row['USER'],row['HOST'],row['DB'],row['COMMAND'],row['STATE'],row['INFO'] )
+                    if it['operate']=='kill':
+                        sql="kill %s"%(row['ID'])
+                        if sandbox==1:
+                            print "     sandbox kill"
+                        else:
+                            try:
+                                cursor.execute(sql)
+                            except:
+                                pass
+                    elif it['operate']=='log':
+                        pass
+                        print "     log"
+                    else:
+                        pass
+                    line='#%s [%s] ID:%s %ss (%s@%s/%s) %s, %s\n%s\n\n'%(it['operate'],now,row['ID'],row['TIME'],row['USER'],row['HOST'],row['DB'],row['COMMAND'],row['STATE'],row['INFO'] )
                     log_fp.write(line)
                 else:
                     print "     skip"
